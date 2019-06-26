@@ -1,0 +1,11 @@
+/.idea
+/__pycache__
+/input
+/output
+/logfile.log
+/*.png
+*.mp4
+/venv
+/.venv
+.DS_Store
+/.vscode
