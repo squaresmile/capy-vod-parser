@@ -35,7 +35,7 @@ def extract_drop_screen(file, output_folder, processes):
     with tqdm(total=total_frame_count) as pbar:
         while cap.isOpened():
             ret, frame = cap.read()
-            frame_id = cap.get(cv2.CAP_PROP_POS_FRAMES)
+            frame_id = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
             if ret:
                 if frame_id % SKIP == 0:
                     pool.apply_async(
