@@ -9,3 +9,5 @@
 /.venv
 .DS_Store
 /.vscode
+/.mypy_cache
+discord_api_token.txt
