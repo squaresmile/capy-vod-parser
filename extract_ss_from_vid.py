@@ -2,9 +2,11 @@ import os
 import sys
 import argparse
 import multiprocessing
+from datetime import datetime
 from os.path import join
 from urllib.parse import urlparse
 from collections import namedtuple
+import pytz
 import cv2
 import youtube_dl
 import streamlink
@@ -47,9 +49,9 @@ def recognize_drop_text(frame, template, name, crop_param):
             )
 
 
-def extract_drop_screen(file, ss, to, crop_param, output_folder, processes, template):
+def extract_drop_screen(file, local_file, ss, to, crop_param, output_folder, processes, template):
     cap = cv2.VideoCapture(file)
-    file = os.path.splitext(file)[0]
+    local_file = os.path.splitext(local_file)[0]
     template = cv2.imread(join("template", template))
     total_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
@@ -74,7 +76,7 @@ def extract_drop_screen(file, ss, to, crop_param, output_folder, processes, temp
                         (
                             frame.copy(),
                             template,
-                            join(output_folder, f"{file}@{frame_id/fps:.2f}@.png"),
+                            join(output_folder, f"{local_file}@{frame_id/fps:.2f}@.png"),
                             crop_param,
                         ),
                     )
@@ -107,15 +109,21 @@ def run(
         os.mkdir(quest_folder)
     if os.path.exists(link):
         file_name = link
+        local_file = file_name
     else:
         if live_stream:
-            file_name = streamlink.streams(link)["best"].url
+            stream = streamlink.streams(link)["best"]
+            file_name = stream.url
+            streamer = file_name.split("/")[-1]
+            current_pacific_time = datetime.now(pytz.timezone("US/Pacific"))
+            local_file = f"{streamer}@{current_pacific_time:}.mp4"
         else:
             try:
                 ydl = youtube_dl.YoutubeDL(YOUTUBE_DL_OPTIONS)
                 ydl.add_default_info_extractors()
                 info = ydl.extract_info(link, download=False)
                 file_name = f"{info['uploader']}@{info['id']}.mp4"
+                local_file = file_name
                 if not os.path.exists(file_name):
                     ydl.download([link])
             except (youtube_dl.utils.UnsupportedError, youtube_dl.utils.DownloadError):
@@ -132,7 +140,7 @@ def run(
             f.write(response.content)
 
     extract_drop_screen(
-        file_name, ss, to, crop_param, quest_folder, processes, template
+        file_name, local_file, ss, to, crop_param, quest_folder, processes, template
     )
     remove_dupe_images(quest_folder)
 
