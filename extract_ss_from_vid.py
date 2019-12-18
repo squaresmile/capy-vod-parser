@@ -1,13 +1,16 @@
 import os
-from os.path import join
+import sys
+import signal
 import argparse
-from urllib.parse import urlparse
 import multiprocessing
+from os.path import join
+from urllib.parse import urlparse
 from collections import namedtuple
 import cv2
-from tqdm import tqdm
 import youtube_dl
+import streamlink
 import requests
+from tqdm import tqdm
 
 
 YOUTUBE_DL_OPTIONS = {
@@ -19,6 +22,10 @@ TEMPLATE_MATCH_THRESHOLD = 0.2
 DUPE_THRESHOLD = 0.001
 DROP_TEXT_TEMPLATE = "drop_text.png"
 Crop = namedtuple("Crop", ["top", "left", "bottom", "right"])
+
+
+def signal_handler(signal, frame):
+    sys.exit(0)
 
 
 def recognize_drop_text(frame, template, name, crop_param):
@@ -96,7 +103,7 @@ def remove_dupe_images(output_folder):
 
 
 def run(
-    link, ss, to, crop_param, quest, processes, template,
+    link, live_stream, ss, to, crop_param, quest, processes, template,
 ):
     quest_folder = join("input", str(quest))
     if not os.path.isdir(quest_folder):
@@ -104,15 +111,19 @@ def run(
     if os.path.exists(link):
         file_name = link
     else:
-        try:
-            ydl = youtube_dl.YoutubeDL(YOUTUBE_DL_OPTIONS)
-            ydl.add_default_info_extractors()
-            info = ydl.extract_info(link, download=False)
-            file_name = f"{info['uploader']}@{info['id']}.mp4"
-            if not os.path.exists(file_name):
-                ydl.download(link)
-        except (youtube_dl.utils.UnsupportedError, youtube_dl.utils.DownloadError):
-            print("Youtube-dl can't download the given link")
+        if live_stream:
+            file_name = streamlink.streams(link)["best"].url
+        else:
+            try:
+                ydl = youtube_dl.YoutubeDL(YOUTUBE_DL_OPTIONS)
+                ydl.add_default_info_extractors()
+                info = ydl.extract_info(link, download=False)
+                file_name = f"{info['uploader']}@{info['id']}.mp4"
+                if not os.path.exists(file_name):
+                    ydl.download(link)
+            except (youtube_dl.utils.UnsupportedError, youtube_dl.utils.DownloadError):
+                print("Youtube-dl can't download the given link")
+                sys.exit(0)
 
     if crop_param is not None:
         crop_param = Crop(*[int(c) for c in crop_param])
@@ -130,6 +141,7 @@ def run(
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal_handler)
     for work_folder in ["input", "template"]:
         if not os.path.exists(work_folder):
             os.makedirs(work_folder)
@@ -158,9 +170,11 @@ if __name__ == "__main__":
         default=cv2.getNumberOfCPUs(),
     )
     parser.add_argument("-c", "--crop", nargs=4, help="Crop: top, left, bottom, right")
+    parser.add_argument("-l", "--live", action="store_true")
     args = parser.parse_args()
     run(
         args.input,
+        args.live,
         args.ss,
         args.to,
         args.crop,

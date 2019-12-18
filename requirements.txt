@@ -2,3 +2,4 @@ opencv-python-headless
 tqdm
 youtube-dl
 requests
+streamlink
