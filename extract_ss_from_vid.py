@@ -1,6 +1,5 @@
 import os
 import sys
-import signal
 import argparse
 import multiprocessing
 from os.path import join
@@ -19,13 +18,9 @@ YOUTUBE_DL_OPTIONS = {
 }
 SKIP = 10
 TEMPLATE_MATCH_THRESHOLD = 0.2
-DUPE_THRESHOLD = 0.001
+DUPE_THRESHOLD = 0.01
 DROP_TEXT_TEMPLATE = "drop_text.png"
 Crop = namedtuple("Crop", ["top", "left", "bottom", "right"])
-
-
-def signal_handler(signal, frame):
-    sys.exit(0)
 
 
 def recognize_drop_text(frame, template, name, crop_param):
@@ -34,9 +29,11 @@ def recognize_drop_text(frame, template, name, crop_param):
     min_val, _, _, _ = cv2.minMaxLoc(res, None)
     # loc is empty if the frame doesn't match
     # return loc[0].size > 0
+    # print(name, min_val)
     if min_val < TEMPLATE_MATCH_THRESHOLD:
+        # print(name, min_val)
         # if loc[0].size > 0:
-        if crop_param is not None:
+        if crop_param is None:
             cv2.imwrite(name, frame)
         else:
             # print(f"Writing {name}")
@@ -120,7 +117,7 @@ def run(
                 info = ydl.extract_info(link, download=False)
                 file_name = f"{info['uploader']}@{info['id']}.mp4"
                 if not os.path.exists(file_name):
-                    ydl.download(link)
+                    ydl.download([link])
             except (youtube_dl.utils.UnsupportedError, youtube_dl.utils.DownloadError):
                 print("Youtube-dl can't download the given link")
                 sys.exit(0)
@@ -141,7 +138,6 @@ def run(
 
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, signal_handler)
     for work_folder in ["input", "template"]:
         if not os.path.exists(work_folder):
             os.makedirs(work_folder)
