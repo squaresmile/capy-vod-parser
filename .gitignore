@@ -2,6 +2,7 @@
 /__pycache__
 /input
 /output
+/uploaded
 /logfile.log
 /*.png
 *.mp4
