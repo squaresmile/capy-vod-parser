@@ -20,7 +20,7 @@ YOUTUBE_DL_OPTIONS = {
 }
 SKIP = 10
 TEMPLATE_MATCH_THRESHOLD = 0.2
-DUPE_THRESHOLD = 0.01
+DUPE_THRESHOLD = 0.05
 DROP_TEXT_TEMPLATE = "drop_text.png"
 Crop = namedtuple("Crop", ["top", "left", "bottom", "right"])
 
@@ -49,7 +49,9 @@ def recognize_drop_text(frame, template, name, crop_param):
             )
 
 
-def extract_drop_screen(file, local_file, ss, to, crop_param, output_folder, processes, template):
+def extract_drop_screen(
+    file, local_file, ss, to, crop_param, output_folder, processes, template
+):
     cap = cv2.VideoCapture(file)
     local_file = os.path.splitext(local_file)[0]
     template = cv2.imread(join("template", template))
@@ -76,7 +78,9 @@ def extract_drop_screen(file, local_file, ss, to, crop_param, output_folder, pro
                         (
                             frame.copy(),
                             template,
-                            join(output_folder, f"{local_file}@{frame_id/fps:.2f}@.png"),
+                            join(
+                                output_folder, f"{local_file}@{frame_id/fps:.2f}@.png"
+                            ),
                             crop_param,
                         ),
                     )
@@ -84,21 +88,49 @@ def extract_drop_screen(file, local_file, ss, to, crop_param, output_folder, pro
             else:
                 break
     cap.release()
+    pool.close()
+    pool.join()
 
 
 def remove_dupe_images(output_folder):
-    files = os.listdir(output_folder)
-    files = sorted(files)
+    files = sorted(os.listdir(output_folder))
+    same_image = [files[0]]
     base_image = cv2.imread(join(output_folder, files[0]))
     for file in files[1:]:
-        full_path = join(output_folder, file)
-        img = cv2.imread(full_path)
+        img = cv2.imread(join(output_folder, file))
         res = cv2.matchTemplate(base_image, img, cv2.TM_SQDIFF_NORMED)
         min_val, _, _, _ = cv2.minMaxLoc(res, None)
         if min_val < DUPE_THRESHOLD:
-            os.remove(full_path)
+            same_image.append(file)
         else:
+            same_image.pop(len(same_image) // 2)
+            for dupe_img in same_image:
+                os.remove(join(output_folder, dupe_img))
+            same_image = [file]
             base_image = img
+    same_image.pop(len(same_image) // 2)
+    for dupe_img in same_image:
+        os.remove(join(output_folder, dupe_img))
+
+
+def remove_blank_drops(output_folder):
+    files = sorted(os.listdir(output_folder))
+    for file in files:
+        img = cv2.imread(join(output_folder, file))
+        height, width, _ = img.shape
+        gray_image = cv2.cvtColor(
+            img[
+                int(height * 0.2) : int(height * 0.7),
+                int(width * 0.1) : int(width * 0.85),
+            ],
+            cv2.COLOR_BGR2GRAY,
+        )
+        _, binary = cv2.threshold(gray_image, 225, 255, cv2.THRESH_BINARY)
+        percentage_color = (binary.sum() / 255) / (
+            (0.7 - 0.2) * height * (0.85 - 0.1) * width
+        )
+        if percentage_color < 0.005:
+            os.remove(join(output_folder, file))
 
 
 def run(
@@ -116,7 +148,7 @@ def run(
             file_name = stream.url
             streamer = file_name.split("/")[-1]
             current_pacific_time = datetime.now(pytz.timezone("US/Pacific"))
-            local_file = f"{streamer}@{current_pacific_time:}.mp4"
+            local_file = f"{streamer}@live{current_pacific_time:%Y-%m-%d %H-%M:%S}.mp4"
         else:
             try:
                 ydl = youtube_dl.YoutubeDL(YOUTUBE_DL_OPTIONS)
@@ -143,6 +175,7 @@ def run(
         file_name, local_file, ss, to, crop_param, quest_folder, processes, template
     )
     remove_dupe_images(quest_folder)
+    remove_blank_drops(quest_folder)
 
 
 if __name__ == "__main__":

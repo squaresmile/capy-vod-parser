@@ -10,6 +10,10 @@ def is_twitter_vod(video_id):
     return video_id[0] == "v" and video_id[1:].isnumeric()
 
 
+def is_live_stream(video_id):
+    return video_id[:4] == "live"
+
+
 class MyClient(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -32,13 +36,15 @@ class MyClient(discord.Client):
                             # https://www.twitch.tv/videos/523062473?t=0h5m51s
                             m, s = divmod(timestamp, 60)
                             h, m = divmod(m, 60)
-                            stream_url_timestamp = f"https://www.twitch.tv/videos/{video_id}?t={h}h{m}m{s}s"
+                            stream_url_timestamp = f"<https://www.twitch.tv/videos/{video_id}?t={h}h{m}m{s}s>"
+                        elif is_live_stream(video_id):
+                            stream_url_timestamp = f"{video_id[4:]} Pacific"
                         else:
                             stream_url_timestamp = (
-                                f"https://youtu.be/{video_id}?t={timestamp}"
+                                f"<https://youtu.be/{video_id}?t={timestamp}>"
                             )
                         await channel.send(
-                            f"{streamer} <{stream_url_timestamp}>",
+                            f"{streamer} {stream_url_timestamp}",
                             file=discord.File(to_upload_path, screenshot),
                         )
                         os.rename(
