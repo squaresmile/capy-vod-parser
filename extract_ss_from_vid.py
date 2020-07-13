@@ -139,7 +139,7 @@ def run(
     output_folder.mkdir(parents=True, exist_ok=True)
     if os.path.exists(link):
         file_name = link
-        local_file = file_name.name
+        local_file = file_name.parent.name + "@" + file_name.name
     else:
         if live_stream:
             stream = streamlink.streams(link)["best"]
