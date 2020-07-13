@@ -1,16 +1,18 @@
-import os
-import sys
 import argparse
 import multiprocessing
+import os
+import sys
+from collections import namedtuple
 from datetime import datetime
 from os.path import join
+from pathlib import Path
 from urllib.parse import urlparse
-from collections import namedtuple
-import pytz
+
 import cv2
-import youtube_dl
-import streamlink
+import pytz
 import requests
+import streamlink
+import youtube_dl
 from tqdm import tqdm
 
 
@@ -18,9 +20,9 @@ YOUTUBE_DL_OPTIONS = {
     "format": "bestvideo[ext=mp4][height<=1080]/best[ext=mp4][height<=1080]",
     "outtmpl": "%(uploader)s@%(id)s.%(ext)s",
 }
-SKIP = 10
+SKIP = 3
 TEMPLATE_MATCH_THRESHOLD = 0.2
-DUPE_THRESHOLD = 0.05
+DUPE_THRESHOLD = 0.1
 DROP_TEXT_TEMPLATE = "drop_text.png"
 Crop = namedtuple("Crop", ["top", "left", "bottom", "right"])
 
@@ -33,13 +35,11 @@ def recognize_drop_text(frame, template, name, crop_param):
     # return loc[0].size > 0
     # print(name, min_val)
     if min_val < TEMPLATE_MATCH_THRESHOLD:
-        # print(name, min_val)
         # if loc[0].size > 0:
         if crop_param is None:
             cv2.imwrite(name, frame)
         else:
             # print(f"Writing {name}")
-            # cv2.imwrite(name, frame[10:110, 10:210])
             cv2.imwrite(
                 name,
                 frame[
@@ -54,7 +54,7 @@ def extract_drop_screen(
 ):
     cap = cv2.VideoCapture(file)
     local_file = os.path.splitext(local_file)[0]
-    template = cv2.imread(join("template", template))
+    template = cv2.imread(template)
     total_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     if ss is None:
@@ -134,14 +134,12 @@ def remove_blank_drops(output_folder):
 
 
 def run(
-    link, live_stream, ss, to, crop_param, quest, processes, template,
+    link, live_stream, ss, to, crop_param, output_folder, processes, template,
 ):
-    quest_folder = join("input", str(quest))
-    if not os.path.isdir(quest_folder):
-        os.mkdir(quest_folder)
+    output_folder.mkdir(parents=True, exist_ok=True)
     if os.path.exists(link):
         file_name = link
-        local_file = file_name
+        local_file = file_name.name
     else:
         if live_stream:
             stream = streamlink.streams(link)["best"]
@@ -171,11 +169,14 @@ def run(
         with open(join("template", template), "wb") as f:
             f.write(response.content)
 
+    print(file_name)
+    print(output_folder)
+
     extract_drop_screen(
-        file_name, local_file, ss, to, crop_param, quest_folder, processes, template
+        str(file_name), local_file, ss, to, crop_param, str(output_folder), processes, template
     )
-    remove_dupe_images(quest_folder)
-    remove_blank_drops(quest_folder)
+    remove_dupe_images(output_folder)
+    remove_blank_drops(output_folder)
 
 
 if __name__ == "__main__":
@@ -192,12 +193,6 @@ if __name__ == "__main__":
         help="Template image or URL for the drop screen",
         default=DROP_TEXT_TEMPLATE,
     )
-    parser.add_argument(
-        "-q",
-        "--quest",
-        help="Output quest folder in input folder",
-        default="video_screenshot",
-    )
     parser.add_argument("-ss", help="Start")
     parser.add_argument("-to", help="End")
     parser.add_argument(
@@ -209,13 +204,17 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--crop", nargs=4, help="Crop: top, left, bottom, right")
     parser.add_argument("-l", "--live", action="store_true")
     args = parser.parse_args()
-    run(
-        args.input,
-        args.live,
-        args.ss,
-        args.to,
-        args.crop,
-        args.quest,
-        args.num_processes,
-        args.template,
-    )
+    input_path = Path(args.input)
+    if input_path.is_dir():
+        for video in input_path.iterdir():
+            if video.name.endswith(".mp4"):
+                run(
+                    video,
+                    args.live,
+                    args.ss,
+                    args.to,
+                    args.crop,
+                    input_path / "input" / "fp",
+                    args.num_processes,
+                    args.template,
+                )
