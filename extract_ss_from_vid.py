@@ -204,7 +204,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--crop", nargs=4, help="Crop: top, left, bottom, right")
     parser.add_argument("-l", "--live", action="store_true")
     args = parser.parse_args()
-    input_path = Path(args.input)
+    input_path = Path(args.input).resolve()
     if input_path.is_dir():
         for video in input_path.iterdir():
             if video.name.endswith(".mp4"):
