@@ -1,5 +1,4 @@
 import argparse
-import multiprocessing
 import os
 import sys
 from collections import namedtuple
@@ -39,7 +38,6 @@ def recognize_drop_text(frame, template, name, crop_param):
         if crop_param is None:
             cv2.imwrite(name, frame)
         else:
-            # print(f"Writing {name}")
             cv2.imwrite(
                 name,
                 frame[
@@ -49,9 +47,7 @@ def recognize_drop_text(frame, template, name, crop_param):
             )
 
 
-def extract_drop_screen(
-    file, local_file, ss, to, crop_param, output_folder, processes, template
-):
+def extract_drop_screen(file, local_file, ss, to, crop_param, output_folder, template):
     cap = cv2.VideoCapture(file)
     local_file = os.path.splitext(local_file)[0]
     template = cv2.imread(template)
@@ -66,30 +62,22 @@ def extract_drop_screen(
     else:
         to_frame = int(to) * fps
     # print(ss_frame, to_frame, fps)
-    pool = multiprocessing.Pool(processes=processes)
     with tqdm(total=total_frame_count) as pbar:
         while cap.isOpened():
             ret, frame = cap.read()
             frame_id = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
             if ret:
                 if (ss_frame <= frame_id <= to_frame) and (frame_id % SKIP == 0):
-                    pool.apply_async(
-                        recognize_drop_text,
-                        (
-                            frame.copy(),
-                            template,
-                            join(
-                                output_folder, f"{local_file}@{frame_id/fps:.2f}@.png"
-                            ),
-                            crop_param,
-                        ),
+                    recognize_drop_text(
+                        frame.copy(),
+                        template,
+                        join(output_folder, f"{local_file}@{frame_id/fps:.2f}@.png"),
+                        crop_param,
                     )
                 pbar.update(1)
             else:
                 break
     cap.release()
-    pool.close()
-    pool.join()
 
 
 def remove_dupe_images(output_folder):
@@ -134,7 +122,7 @@ def remove_blank_drops(output_folder):
 
 
 def run(
-    link, live_stream, ss, to, crop_param, output_folder, processes, template,
+    link, live_stream, ss, to, crop_param, output_folder, template,
 ):
     output_folder.mkdir(parents=True, exist_ok=True)
     if os.path.exists(link):
@@ -173,7 +161,7 @@ def run(
     print(output_folder)
 
     extract_drop_screen(
-        str(file_name), local_file, ss, to, crop_param, str(output_folder), processes, template
+        str(file_name), local_file, ss, to, crop_param, str(output_folder), template,
     )
     remove_dupe_images(output_folder)
     remove_blank_drops(output_folder)
@@ -195,12 +183,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("-ss", help="Start")
     parser.add_argument("-to", help="End")
-    parser.add_argument(
-        "-n",
-        "--num-processes",
-        help="Number of processes to run",
-        default=cv2.getNumberOfCPUs(),
-    )
     parser.add_argument("-c", "--crop", nargs=4, help="Crop: top, left, bottom, right")
     parser.add_argument("-l", "--live", action="store_true")
     args = parser.parse_args()
@@ -215,6 +197,5 @@ if __name__ == "__main__":
                     args.to,
                     args.crop,
                     input_path / "input" / "fp",
-                    args.num_processes,
                     args.template,
                 )
