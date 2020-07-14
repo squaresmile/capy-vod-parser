@@ -1,6 +1,8 @@
 import os
 from os.path import join
+
 import discord
+
 
 CHANNEL = "bots-la-soleil"
 FOLDER = "input"
