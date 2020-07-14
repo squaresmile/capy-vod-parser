@@ -11,4 +11,5 @@
 .DS_Store
 /.vscode
 /.mypy_cache
+/vods
 discord_api_token.txt
